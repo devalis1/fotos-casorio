@@ -1,92 +1,102 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { v2 as cloudinary } from 'cloudinary'
 
-// Configurar Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
+export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   try {
+    // Log para debug
+    console.log('🔍 DEBUG: Iniciando upload...')
+    console.log('🔍 DEBUG: CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? '✅ SET' : '❌ NOT SET')
+    console.log('🔍 DEBUG: CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? '✅ SET' : '❌ NOT SET')
+    console.log('🔍 DEBUG: CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '✅ SET' : '❌ NOT SET')
+    
     // Verificar configuración de Cloudinary
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.log('❌ ERROR: Variables de Cloudinary faltantes')
       return NextResponse.json(
-        { error: 'Configuración de Cloudinary no encontrada' },
+        { 
+          error: 'Configuración de Cloudinary no encontrada',
+          debug: {
+            cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+            apiKey: !!process.env.CLOUDINARY_API_KEY,
+            apiSecret: !!process.env.CLOUDINARY_API_SECRET
+          }
+        },
         { status: 500 }
       )
     }
 
+    // Configurar Cloudinary
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    })
+
+    console.log('🔍 DEBUG: Cloudinary configurado correctamente')
+
     const formData = await request.formData()
-    const file = formData.get('photo') as File
-    
+    const file = formData.get('file') as File
+
     if (!file) {
-      return NextResponse.json(
-        { error: 'No se proporcionó ningún archivo' },
-        { status: 400 }
-      )
+      console.log('❌ ERROR: No se encontró archivo')
+      return NextResponse.json({ error: 'No se encontró archivo' }, { status: 400 })
     }
 
-               // Verificar que sea una imagen o video
-           if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-             return NextResponse.json(
-               { error: 'Solo se permiten archivos de imagen o video' },
-               { status: 400 }
-             )
-           }
+    console.log('🔍 DEBUG: Archivo recibido:', file.name, 'Tamaño:', file.size)
 
-    // Convertir File a Buffer para Cloudinary
+    // Convertir File a Buffer
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-               // Determinar el tipo de recurso
-           const isVideo = file.type.startsWith('video/')
-           const resourceType = isVideo ? 'video' : 'image'
-           const folder = isVideo ? 'casamiento-videos' : 'casamiento-fotos'
-           
-           // Subir a Cloudinary
-           const result = await new Promise((resolve, reject) => {
-             const uploadStream = cloudinary.uploader.upload_stream(
-               {
-                 folder: folder,
-                 resource_type: resourceType,
-                 transformation: isVideo ? [
-                   { quality: 'auto:good' }, // Optimizar calidad automáticamente
-                   { fetch_format: 'auto' }  // Formato automático
-                 ] : [
-                   { quality: 'auto:good' }, // Optimizar calidad automáticamente
-                   { fetch_format: 'auto' }  // Formato automático
-                 ]
-               },
-               (error, result) => {
-                 if (error) reject(error)
-                 else resolve(result)
-               }
-             )
+    console.log('🔍 DEBUG: Buffer creado, tamaño:', buffer.length)
 
-             uploadStream.end(buffer)
-           })
+    // Subir a Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'auto',
+          folder: 'fotos-casamiento',
+        },
+        (error, result) => {
+          if (error) {
+            console.log('❌ ERROR Cloudinary:', error)
+            reject(error)
+          } else {
+            console.log('✅ SUCCESS: Imagen subida a Cloudinary')
+            resolve(result)
+          }
+        }
+      ).end(buffer)
+    })
 
-    // Guardar información en la base de datos (opcional)
-    // Aquí podrías guardar metadata como fecha, nombre del archivo, etc.
+    console.log('🔍 DEBUG: Upload completado, resultado:', result)
 
-    return NextResponse.json({
-      success: true,
-      url: (result as any).secure_url,
-      publicId: (result as any).public_id,
-      message: 'Foto subida exitosamente'
+    return NextResponse.json({ 
+      success: true, 
+      data: result,
+      debug: {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
+        apiSecret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
+      }
     })
 
   } catch (error) {
-    console.error('Error en la subida:', error)
+    console.log('❌ ERROR GENERAL:', error)
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { 
+        error: 'Error en el servidor',
+        details: error instanceof Error ? error.message : 'Error desconocido',
+        debug: {
+          cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+          apiKey: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
+          apiSecret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
+        }
+      },
       { status: 500 }
     )
   }
 }
-
-// Configurar límites de tamaño y comportamiento de la ruta
-export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5 minutos para subidas grandes
