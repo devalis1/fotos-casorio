@@ -1,51 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { v2 as cloudinary } from 'cloudinary'
+import { uploadToCloudinary, validateCloudinaryConfig } from '@/lib/cloudinary'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   try {
-    // Log para debug
     console.log('🔍 DEBUG: Iniciando upload...')
-    console.log('🔍 DEBUG: CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME ? '✅ SET' : '❌ NOT SET')
-    console.log('🔍 DEBUG: CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? '✅ SET' : '❌ NOT SET')
-    console.log('🔍 DEBUG: CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '✅ SET' : '❌ NOT SET')
     
-    // Verificar configuración de Cloudinary
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      console.log('❌ ERROR: Variables de Cloudinary faltantes')
+    // Validar configuración de Cloudinary
+    try {
+      await validateCloudinaryConfig()
+      console.log('✅ DEBUG: Configuración de Cloudinary válida')
+    } catch (error) {
+      console.log('❌ ERROR: Configuración de Cloudinary inválida:', error)
       return NextResponse.json(
-        { 
-          error: 'Configuración de Cloudinary no encontrada',
-          debug: {
-            cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
-            apiKey: !!process.env.CLOUDINARY_API_KEY,
-            apiSecret: !!process.env.CLOUDINARY_API_SECRET
-          }
-        },
+        { error: 'Error en la configuración de Cloudinary' },
         { status: 500 }
       )
     }
-
-    // Configurar Cloudinary
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-    })
-
-    console.log('🔍 DEBUG: Cloudinary configurado correctamente')
 
     const formData = await request.formData()
     const file = formData.get('photo') as File
 
     if (!file) {
       console.log('❌ ERROR: No se encontró archivo en campo "photo"')
-      return NextResponse.json({ error: 'No se encontró archivo en campo "photo"' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'No se encontró archivo en campo "photo"' }, 
+        { status: 400 }
+      )
     }
 
-    console.log('🔍 DEBUG: Archivo recibido:', file.name, 'Tamaño:', file.size)
+    console.log('🔍 DEBUG: Archivo recibido:', file.name, 'Tamaño:', file.size, 'Tipo:', file.type)
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      console.log('❌ ERROR: Tipo de archivo no válido:', file.type)
+      return NextResponse.json(
+        { error: 'Solo se permiten archivos de imagen' },
+        { status: 400 }
+      )
+    }
+
+    // Validar tamaño (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      console.log('❌ ERROR: Archivo demasiado grande:', file.size, 'bytes')
+      return NextResponse.json(
+        { error: 'El archivo es demasiado grande. Máximo 10MB' },
+        { status: 400 }
+      )
+    }
 
     // Convertir File a Buffer
     const bytes = await file.arrayBuffer()
@@ -54,47 +59,43 @@ export async function POST(request: NextRequest) {
     console.log('🔍 DEBUG: Buffer creado, tamaño:', buffer.length)
 
     // Subir a Cloudinary
-    const result = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        {
-          resource_type: 'auto',
-          folder: 'fotos-casamiento',
-        },
-        (error, result) => {
-          if (error) {
-            console.log('❌ ERROR Cloudinary:', error)
-            reject(error)
-          } else {
-            console.log('✅ SUCCESS: Imagen subida a Cloudinary')
-            resolve(result)
-          }
-        }
-      ).end(buffer)
+    const result = await uploadToCloudinary(buffer, file.type, {
+      folder: 'fotos-casamiento'
     })
 
-    console.log('🔍 DEBUG: Upload completado, resultado:', result)
+    console.log('✅ SUCCESS: Upload completado exitosamente')
 
     return NextResponse.json({ 
       success: true, 
-      data: result,
-      debug: {
-        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-        apiKey: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
-        apiSecret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
-      }
+      data: result
     })
 
   } catch (error) {
     console.log('❌ ERROR GENERAL:', error)
+    
+    // Manejar errores específicos de Cloudinary
+    if (error && typeof error === 'object' && 'http_code' in error) {
+      const cloudinaryError = error as any
+      console.log('❌ ERROR Cloudinary específico:', {
+        http_code: cloudinaryError.http_code,
+        message: cloudinaryError.message,
+        name: cloudinaryError.name
+      })
+      
+      return NextResponse.json(
+        { 
+          error: 'Error en Cloudinary',
+          details: cloudinaryError.message,
+          code: cloudinaryError.http_code
+        },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
       { 
         error: 'Error en el servidor',
-        details: error instanceof Error ? error.message : 'Error desconocido',
-        debug: {
-          cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-          apiKey: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
-          apiSecret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
-        }
+        details: error instanceof Error ? error.message : 'Error desconocido'
       },
       { status: 500 }
     )
