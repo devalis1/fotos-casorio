@@ -38,11 +38,11 @@ export async function POST(request: NextRequest) {
     console.log('🔍 DEBUG: Cloudinary configurado correctamente')
 
     const formData = await request.formData()
-    const file = formData.get('file') as File
+    const file = formData.get('photo') as File
 
     if (!file) {
-      console.log('❌ ERROR: No se encontró archivo')
-      return NextResponse.json({ error: 'No se encontró archivo' }, { status: 400 })
+      console.log('❌ ERROR: No se encontró archivo en campo "photo"')
+      return NextResponse.json({ error: 'No se encontró archivo en campo "photo"' }, { status: 400 })
     }
 
     console.log('🔍 DEBUG: Archivo recibido:', file.name, 'Tamaño:', file.size)
