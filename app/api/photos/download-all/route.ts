@@ -11,19 +11,27 @@ cloudinary.config({
 
 export async function GET() {
   try {
-               // Obtener todas las fotos y videos
-           const [fotosResult, videosResult] = await Promise.all([
-             cloudinary.api.resources({
-               type: 'upload',
-               prefix: 'casamiento-fotos/',
-               max_results: 500
-             }),
-             cloudinary.api.resources({
-               type: 'upload',
-               prefix: 'casamiento-videos/',
-               max_results: 500
-             })
-           ])
+    // Verificar configuración de Cloudinary
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return NextResponse.json(
+        { error: 'Configuración de Cloudinary no encontrada' },
+        { status: 500 }
+      )
+    }
+
+    // Obtener todas las fotos y videos
+    const [fotosResult, videosResult] = await Promise.all([
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: 'casamiento-fotos/',
+        max_results: 500
+      }),
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: 'casamiento-videos/',
+        max_results: 500
+      })
+    ])
            
            const allResources = [...fotosResult.resources, ...videosResult.resources]
 

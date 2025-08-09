@@ -10,23 +10,31 @@ cloudinary.config({
 
 export async function GET() {
   try {
-               // Obtener todas las fotos y videos de Cloudinary
-           const [fotosResult, videosResult] = await Promise.all([
-             cloudinary.api.resources({
-               type: 'upload',
-               prefix: 'casamiento-fotos/',
-               max_results: 500,
-               sort_by: 'created_at',
-               sort_direction: 'desc'
-             }),
-             cloudinary.api.resources({
-               type: 'upload',
-               prefix: 'casamiento-videos/',
-               max_results: 500,
-               sort_by: 'created_at',
-               sort_direction: 'desc'
-             })
-           ])
+    // Verificar configuración de Cloudinary
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return NextResponse.json(
+        { error: 'Configuración de Cloudinary no encontrada' },
+        { status: 500 }
+      )
+    }
+
+    // Obtener todas las fotos y videos de Cloudinary
+    const [fotosResult, videosResult] = await Promise.all([
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: 'casamiento-fotos/',
+        max_results: 500,
+        sort_by: 'created_at',
+        sort_direction: 'desc'
+      }),
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: 'casamiento-videos/',
+        max_results: 500,
+        sort_by: 'created_at',
+        sort_direction: 'desc'
+      })
+    ])
 
                // Combinar y transformar los resultados
            const allResources = [...fotosResult.resources, ...videosResult.resources]

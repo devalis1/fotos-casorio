@@ -10,6 +10,14 @@ cloudinary.config({
 
 export async function POST(request: NextRequest) {
   try {
+    // Verificar configuración de Cloudinary
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return NextResponse.json(
+        { error: 'Configuración de Cloudinary no encontrada' },
+        { status: 500 }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('photo') as File
     
