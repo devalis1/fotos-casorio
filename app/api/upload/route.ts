@@ -79,9 +79,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Configurar límites de tamaño (opcional)
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+// Configurar límites de tamaño y comportamiento de la ruta
+export const dynamic = 'force-dynamic'
+export const maxDuration = 300 // 5 minutos para subidas grandes

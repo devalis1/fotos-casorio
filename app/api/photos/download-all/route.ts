@@ -56,15 +56,16 @@ export async function GET() {
     await Promise.all(downloadPromises)
 
     // Generar ZIP
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' })
 
-    // Crear respuesta con headers apropiados
-    const response = new NextResponse(zipBuffer)
-    response.headers.set('Content-Type', 'application/zip')
-    response.headers.set('Content-Disposition', 'attachment; filename="fotos-casamiento.zip"')
-    response.headers.set('Content-Length', zipBuffer.length.toString())
-
-    return response
+    // Crear respuesta con headers apropiados usando Response nativo
+    return new Response(zipBuffer, {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="fotos-casamiento.zip"',
+        'Content-Length': zipBuffer.byteLength.toString()
+      }
+    })
 
   } catch (error) {
     console.error('Error creando ZIP:', error)
